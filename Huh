@@ -1,0 +1,1031 @@
+local Library = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua"))()
+local NewWindow = Library:CreateWindow({
+    Title = "msPaint V4",
+    Footer = "Automation",
+    ToggleKeybind = Enum.KeyCode.RightControl,
+})
+
+--==================================================
+-- NEW TAB
+--==================================================
+
+local NewTab = NewWindow:AddTab("Tab", "image")
+
+local CollectionBox = NewTab:AddLeftGroupbox("Collection")
+local PlayerBox = NewTab:AddLeftGroupbox("Player")
+
+local ESPBox = NewTab:AddRightGroupbox("ESP")
+local NotifyBox = NewTab:AddRightGroupbox("Thông báo")
+
+--==================================================
+-- SERVICES
+--==================================================
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+
+--==================================================
+-- HELPERS
+--==================================================
+
+local function GetRoot()
+    local Character = LocalPlayer.Character
+    return Character
+        and Character:FindFirstChild("HumanoidRootPart")
+end
+
+local function GetHumanoid(Model)
+    if not Model then
+        return nil
+    end
+
+    return Model:FindFirstChildOfClass("Humanoid")
+        or Model:FindFirstChild("Humanoid")
+end
+
+local function GetRootPart(Model)
+    if not Model then
+        return nil
+    end
+
+    return Model:FindFirstChild("HumanoidRootPart")
+        or Model.PrimaryPart
+        or Model:FindFirstChildWhichIsA("BasePart", true)
+end
+
+--==================================================
+-- ZAJА / DESTORYS
+--==================================================
+
+local ZajaMode = "Tween"
+local ZajaRunning = false
+local CurrentZajaTween
+
+CollectionBox:AddDropdown("ZajaMode", {
+    Values = {
+        "Tween",
+        "Teleport",
+    },
+
+    Default = "Tween",
+    Multi = false,
+    Text = "Mode",
+
+    Callback = function(Value)
+        ZajaMode = Value
+    end,
+})
+
+local function FindArenaParts()
+
+    local Result = {}
+
+    local WorldMap =
+        workspace:FindFirstChild("World Map")
+
+    local SecretBossArea =
+        WorldMap
+        and WorldMap:FindFirstChild("SecretBossArea")
+
+    if not SecretBossArea then
+        return Result
+    end
+
+    for _, Object in ipairs(
+        SecretBossArea:GetDescendants()
+    ) do
+
+        if string.find(
+            string.lower(Object.Name),
+            "arena"
+        ) then
+
+            local Part
+
+            if Object:IsA("BasePart") then
+                Part = Object
+
+            elseif Object:IsA("Model") then
+                Part =
+                    Object.PrimaryPart
+                    or Object:FindFirstChildWhichIsA(
+                        "BasePart",
+                        true
+                    )
+            end
+
+            if Part then
+                table.insert(Result, Part)
+            end
+        end
+    end
+
+    return Result
+end
+
+local function BossExists()
+
+    local WorldMobs =
+        workspace:FindFirstChild("World Mobs")
+
+    local EventMobs =
+        WorldMobs
+        and WorldMobs:FindFirstChild("Event Mobs")
+
+    if not EventMobs then
+        return false
+    end
+
+    return
+        EventMobs:FindFirstChild("Zaja") ~= nil
+        or EventMobs:FindFirstChild("Destroyer") ~= nil
+        or EventMobs:FindFirstChild("Destorys") ~= nil
+end
+
+local function MoveToArena(Arena)
+
+    local Root = GetRoot()
+
+    if not Root or not Arena then
+        return
+    end
+
+    local Target =
+        Arena.CFrame + Vector3.new(0, 3, 0)
+
+    if ZajaMode == "Teleport" then
+
+        Root.CFrame = Target
+
+    else
+
+        local Distance =
+            (Arena.Position - Root.Position).Magnitude
+
+        local Time =
+            math.max(Distance / 300, 0.05)
+
+        CurrentZajaTween =
+            TweenService:Create(
+                Root,
+                TweenInfo.new(
+                    Time,
+                    Enum.EasingStyle.Linear
+                ),
+                {
+                    CFrame = Target
+                }
+            )
+
+        CurrentZajaTween:Play()
+        CurrentZajaTween.Completed:Wait()
+
+        CurrentZajaTween = nil
+    end
+end
+
+CollectionBox:AddToggle("ZajaDestroyCollection", {
+    Text = "Zaja Destorys [Collection]",
+    Default = false,
+
+    Callback = function(Value)
+
+        ZajaRunning = Value
+
+        if not Value then
+
+            if CurrentZajaTween then
+                pcall(function()
+                    CurrentZajaTween:Cancel()
+                end)
+
+                CurrentZajaTween = nil
+            end
+
+            return
+        end
+
+        task.spawn(function()
+
+            while ZajaRunning
+                and Library.Toggles.ZajaDestroyCollection.Value do
+
+                -- Zaja / Destroyer xuất hiện
+                -- => DỪNG di chuyển
+                if BossExists() then
+                    task.wait(1)
+                    continue
+                end
+
+                local Arenas =
+                    FindArenaParts()
+
+                for _, Arena in ipairs(Arenas) do
+
+                    if not Library.Toggles.ZajaDestroyCollection.Value then
+                        break
+                    end
+
+                    -- Boss xuất hiện giữa chừng
+                    if BossExists() then
+                        break
+                    end
+
+                    MoveToArena(Arena)
+
+                    -- 10 giây mới chuyển Arena tiếp
+                    task.wait(10)
+                end
+
+                task.wait(0.2)
+            end
+        end)
+    end,
+})
+
+--==================================================
+-- AUTO COLLECT V2
+--==================================================
+
+PlayerBox:AddToggle("AutoCollectV2", {
+    Text = "Auto Collect v2",
+    Default = false,
+
+    Callback = function(Value)
+
+        if not Value then
+            return
+        end
+
+        task.spawn(function()
+
+            while Library.Toggles.AutoCollectV2.Value do
+
+                for _, Object in ipairs(
+                    workspace:GetDescendants()
+                ) do
+
+                    if Object:IsA("ProximityPrompt") then
+
+                        pcall(function()
+                            Object.MaxActivationDistance = 30
+                        end)
+                    end
+                end
+
+                task.wait(1)
+            end
+        end)
+    end,
+})
+
+--==================================================
+-- ANTI LAG
+--==================================================
+
+local AntiLagConnection
+
+PlayerBox:AddToggle("AntiLagNew", {
+    Text = "Anti Lag",
+    Default = false,
+
+    Callback = function(Value)
+
+        if AntiLagConnection then
+            AntiLagConnection:Disconnect()
+            AntiLagConnection = nil
+        end
+
+        if not Value then
+            return
+        end
+
+        local function RemoveEffects(Object)
+
+            if Object:IsA("ParticleEmitter")
+                or Object:IsA("Trail")
+                or Object:IsA("Beam")
+                or Object:IsA("Smoke")
+                or Object:IsA("Fire")
+                or Object:IsA("Sparkles") then
+
+                pcall(function()
+                    Object.Enabled = false
+                end)
+            end
+        end
+
+        for _, Object in ipairs(
+            workspace:GetDescendants()
+        ) do
+            RemoveEffects(Object)
+        end
+
+        AntiLagConnection =
+            workspace.DescendantAdded:Connect(
+                function(Object)
+
+                    if Library.Toggles.AntiLagNew.Value then
+                        RemoveEffects(Object)
+                    end
+                end
+            )
+    end,
+})
+
+--==================================================
+-- AUTO SHOP
+--==================================================
+
+PlayerBox:AddToggle("AutoShopNew", {
+    Text = "Auto Shop",
+    Default = false,
+
+    Callback = function(Value)
+
+        if not Value then
+            return
+        end
+
+        task.spawn(function()
+
+            while Library.Toggles.AutoShopNew.Value do
+
+                for _, Object in ipairs(
+                    workspace:GetDescendants()
+                ) do
+
+                    if Object:IsA("ProximityPrompt") then
+
+                        local Parent =
+                            Object.Parent
+
+                        local Name =
+                            string.lower(
+                                Parent.Name
+                            )
+
+                        if string.find(Name, "shop")
+                            or string.find(Name, "npc") then
+
+                            pcall(function()
+                                fireproximityprompt(Object)
+                            end)
+                        end
+                    end
+                end
+
+                -- 3 phút
+                task.wait(180)
+            end
+        end)
+    end,
+})
+
+--==================================================
+-- ESP STARDUST ORB
+--==================================================
+
+local StardustColor =
+    Color3.fromRGB(255, 255, 0)
+
+local StardustEnabled = false
+
+local function GetStardustFolder()
+
+    local Misc =
+        workspace:FindFirstChild("Misc")
+
+    return Misc
+        and Misc:FindFirstChild(
+            "DragonSphereSpawns"
+        )
+end
+
+local function RemoveStardustESP()
+
+    local Folder =
+        GetStardustFolder()
+
+    if not Folder then
+        return
+    end
+
+    for _, Object in ipairs(
+        Folder:GetDescendants()
+    ) do
+
+        local ESP =
+            Object:FindFirstChild("StardustESP")
+
+        if ESP then
+            ESP:Destroy()
+        end
+    end
+end
+
+local function MakeStardustESP(Object)
+
+    if not StardustEnabled then
+        return
+    end
+
+    local Part
+
+    if Object:IsA("BasePart") then
+        Part = Object
+
+    elseif Object:IsA("Model") then
+        Part =
+            Object.PrimaryPart
+            or Object:FindFirstChildWhichIsA(
+                "BasePart",
+                true
+            )
+    end
+
+    if not Part then
+        return
+    end
+
+    -- Phải có Mesh
+    local Mesh =
+        Part:FindFirstChildWhichIsA(
+            "SpecialMesh",
+            true
+        )
+        or Part:FindFirstChildWhichIsA(
+            "Mesh",
+            true
+        )
+
+    if not Mesh then
+        return
+    end
+
+    if Part:FindFirstChild("StardustESP") then
+        return
+    end
+
+    local Highlight =
+        Instance.new("Highlight")
+
+    Highlight.Name = "StardustESP"
+    Highlight.Adornee = Part
+    Highlight.FillColor = StardustColor
+    Highlight.OutlineColor = StardustColor
+    Highlight.FillTransparency = 0.45
+    Highlight.OutlineTransparency = 0
+
+    Highlight.Parent = Part
+end
+
+ESPBox:AddToggle("ESPStardustOrbNew", {
+    Text = "ESP Stardust Orb",
+    Default = false,
+
+    Callback = function(Value)
+
+        StardustEnabled = Value
+
+        if not Value then
+            RemoveStardustESP()
+            return
+        end
+
+        task.spawn(function()
+
+            while StardustEnabled
+                and Library.Toggles.ESPStardustOrbNew.Value do
+
+                local Folder =
+                    GetStardustFolder()
+
+                if Folder then
+
+                    for _, Object in ipairs(
+                        Folder:GetDescendants()
+                    ) do
+                        MakeStardustESP(Object)
+                    end
+                end
+
+                task.wait(1)
+            end
+        end)
+    end,
+})
+
+ESPBox:AddDropdown("StardustColorNew", {
+    Values = {
+        "Yellow",
+        "Cyan",
+        "Red",
+        "Green",
+        "Purple",
+        "White",
+    },
+
+    Default = "Yellow",
+    Multi = false,
+    Text = "ESP Color",
+
+    Callback = function(Value)
+
+        local Colors = {
+
+            Yellow =
+                Color3.fromRGB(
+                    255, 255, 0
+                ),
+
+            Cyan =
+                Color3.fromRGB(
+                    0, 255, 255
+                ),
+
+            Red =
+                Color3.fromRGB(
+                    255, 0, 0
+                ),
+
+            Green =
+                Color3.fromRGB(
+                    0, 255, 0
+                ),
+
+            Purple =
+                Color3.fromRGB(
+                    180, 0, 255
+                ),
+
+            White =
+                Color3.fromRGB(
+                    255, 255, 255
+                ),
+        }
+
+        StardustColor =
+            Colors[Value]
+            or Colors.Yellow
+
+        if StardustEnabled then
+
+            RemoveStardustESP()
+
+            local Folder =
+                GetStardustFolder()
+
+            if Folder then
+
+                for _, Object in ipairs(
+                    Folder:GetDescendants()
+                ) do
+                    MakeStardustESP(Object)
+                end
+            end
+        end
+    end,
+})
+
+--==================================================
+-- THÔNG BÁO HP
+--==================================================
+
+local HPMode = "Number"
+local HPEnabled = false
+
+NotifyBox:AddDropdown("HPModeNew", {
+    Values = {
+        "%",
+        "Number",
+    },
+
+    Default = "Number",
+    Multi = false,
+    Text = "HP Display",
+
+    Callback = function(Value)
+        HPMode = Value
+    end,
+})
+
+local function CreateHPESP(Model)
+
+    if Model == LocalPlayer.Character then
+        return
+    end
+
+    local Humanoid =
+        GetHumanoid(Model)
+
+    local Root =
+        GetRootPart(Model)
+
+    if not Humanoid or not Root then
+        return
+    end
+
+    local Billboard =
+        Root:FindFirstChild("HPESP_New")
+
+    if not Billboard then
+
+        Billboard =
+            Instance.new("BillboardGui")
+
+        Billboard.Name = "HPESP_New"
+        Billboard.Adornee = Root
+        Billboard.Size =
+            UDim2.new(0, 160, 0, 35)
+
+        Billboard.StudsOffset =
+            Vector3.new(0, 4, 0)
+
+        Billboard.AlwaysOnTop = true
+
+        local Label =
+            Instance.new("TextLabel")
+
+        Label.Name = "HPLabel"
+        Label.Size =
+            UDim2.fromScale(1, 1)
+
+        Label.BackgroundTransparency = 1
+        Label.TextStrokeTransparency = 0
+        Label.TextSize = 16
+
+        Label.Parent = Billboard
+        Billboard.Parent = Root
+    end
+
+    local Label =
+        Billboard:FindFirstChild("HPLabel")
+
+    if not Label then
+        return
+    end
+
+    if HPMode == "%" then
+
+        local Percent = 0
+
+        if Humanoid.MaxHealth > 0 then
+            Percent =
+                math.floor(
+                    Humanoid.Health
+                    / Humanoid.MaxHealth
+                    * 100
+                )
+        end
+
+        Label.Text =
+            "HP: " .. Percent .. "%"
+
+    else
+
+        Label.Text =
+            "HP: "
+            .. math.floor(Humanoid.Health)
+            .. " / "
+            .. math.floor(Humanoid.MaxHealth)
+    end
+end
+
+NotifyBox:AddToggle("NotifyHPNew", {
+    Text = "Thông báo HP",
+    Default = false,
+
+    Callback = function(Value)
+
+        HPEnabled = Value
+
+        if not Value then
+
+            for _, Object in ipairs(
+                workspace:GetDescendants()
+            ) do
+
+                if Object:IsA("BillboardGui")
+                    and Object.Name == "HPESP_New" then
+
+                    Object:Destroy()
+                end
+            end
+
+            return
+        end
+
+        task.spawn(function()
+
+            while HPEnabled
+                and Library.Toggles.NotifyHPNew.Value do
+
+                for _, Object in ipairs(
+                    workspace:GetDescendants()
+                ) do
+
+                    if Object:IsA("Model") then
+                        CreateHPESP(Object)
+                    end
+                end
+
+                task.wait(0.2)
+            end
+        end)
+    end,
+})
+
+--==================================================
+-- ESP HP
+--==================================================
+
+NotifyBox:AddToggle("PersistentHPESP", {
+    Text = "ESP HP",
+    Default = false,
+
+    Callback = function(Value)
+
+        HPEnabled = Value
+
+        if not Value then
+
+            for _, Object in ipairs(
+                workspace:GetDescendants()
+            ) do
+
+                if Object:IsA("BillboardGui")
+                    and Object.Name == "HPESP_New" then
+
+                    Object:Destroy()
+                end
+            end
+
+            return
+        end
+
+        task.spawn(function()
+
+            while Library.Toggles.PersistentHPESP.Value do
+
+                for _, Object in ipairs(
+                    workspace:GetDescendants()
+                ) do
+
+                    if Object:IsA("Model") then
+                        CreateHPESP(Object)
+                    end
+                end
+
+                task.wait(0.2)
+            end
+        end)
+    end,
+})
+
+--==================================================
+-- SHOW ENERGY
+--==================================================
+
+local EnergyESPEnabled = false
+
+NotifyBox:AddToggle("ShowEnergyNew", {
+    Text = "Show Energy",
+    Default = false,
+
+    Callback = function(Value)
+
+        EnergyESPEnabled = Value
+
+        if not Value then
+
+            for _, Object in ipairs(
+                workspace:GetDescendants()
+            ) do
+
+                if Object:IsA("BillboardGui")
+                    and Object.Name == "EnergyESP_New" then
+
+                    Object:Destroy()
+                end
+            end
+
+            return
+        end
+
+        task.spawn(function()
+
+            while EnergyESPEnabled
+                and Library.Toggles.ShowEnergyNew.Value do
+
+                local Characters =
+                    workspace:FindFirstChild(
+                        "Characters"
+                    )
+
+                if Characters then
+
+                    for _, Character in ipairs(
+                        Characters:GetChildren()
+                    ) do
+
+                        local Status =
+                            Character:FindFirstChild(
+                                "Status"
+                            )
+
+                        local Energy =
+                            Status
+                            and Status:FindFirstChild(
+                                "CurrentEnergy"
+                            )
+
+                        local MaxEnergy =
+                            Status
+                            and Status:FindFirstChild(
+                                "MaxEnergy"
+                            )
+
+                        local Root =
+                            GetRootPart(Character)
+
+                        if Energy
+                            and MaxEnergy
+                            and Root then
+
+                            local Billboard =
+                                Root:FindFirstChild(
+                                    "EnergyESP_New"
+                                )
+
+                            if not Billboard then
+
+                                Billboard =
+                                    Instance.new(
+                                        "BillboardGui"
+                                    )
+
+                                Billboard.Name =
+                                    "EnergyESP_New"
+
+                                Billboard.Size =
+                                    UDim2.new(
+                                        0, 160,
+                                        0, 30
+                                    )
+
+                                Billboard.StudsOffset =
+                                    Vector3.new(
+                                        0, 5, 0
+                                    )
+
+                                Billboard.AlwaysOnTop =
+                                    true
+
+                                local Label =
+                                    Instance.new(
+                                        "TextLabel"
+                                    )
+
+                                Label.Name =
+                                    "EnergyLabel"
+
+                                Label.Size =
+                                    UDim2.fromScale(
+                                        1, 1
+                                    )
+
+                                Label.BackgroundTransparency =
+                                    1
+
+                                Label.TextStrokeTransparency =
+                                    0
+
+                                Label.TextSize = 15
+                                Label.Parent = Billboard
+
+                                Billboard.Parent =
+                                    Root
+                            end
+
+                            local Label =
+                                Billboard:FindFirstChild(
+                                    "EnergyLabel"
+                                )
+
+                            if Label then
+
+                                Label.Text =
+                                    "Energy: "
+                                    .. tostring(
+                                        Energy.Value
+                                    )
+                                    .. " / "
+                                    .. tostring(
+                                        MaxEnergy.Value
+                                    )
+                            end
+                        end
+                    end
+                end
+
+                task.wait(0.5)
+            end
+        end)
+    end,
+})
+
+--==================================================
+-- DUNGEON CLEAR COUNTER
+--==================================================
+
+local ClearCount = 0
+local TrackedMobs = {}
+
+local EventMobs =
+    workspace
+    :WaitForChild("World Mobs")
+    :WaitForChild("Event Mobs")
+
+local ClearLabel =
+    NotifyBox:AddLabel("Dungeon Clear: 0")
+
+local function UpdateClearLabel()
+
+    pcall(function()
+        ClearLabel:SetText(
+            "Dungeon Clear: "
+            .. tostring(ClearCount)
+        )
+    end)
+end
+
+local function TrackMob(Mob)
+
+    if TrackedMobs[Mob] then
+        return
+    end
+
+    local Humanoid =
+        GetHumanoid(Mob)
+
+    if not Humanoid then
+        return
+    end
+
+    TrackedMobs[Mob] = true
+
+    local ReachedZero = false
+
+    task.spawn(function()
+
+        while Mob.Parent do
+
+            if Humanoid.Health <= 0 then
+                ReachedZero = true
+            end
+
+            task.wait(0.05)
+        end
+
+        if ReachedZero then
+
+            ClearCount += 1
+            UpdateClearLabel()
+
+            Library:Notify({
+                Title = "Dungeon Clear",
+                Description =
+                    "Clear #"
+                    .. tostring(ClearCount),
+                Time = 2
+            })
+        end
+
+        TrackedMobs[Mob] = nil
+    end)
+end
+
+for _, Mob in ipairs(
+    EventMobs:GetChildren()
+) do
+    TrackMob(Mob)
+end
+
+EventMobs.ChildAdded:Connect(function(Mob)
+    TrackMob(Mob)
+end)
+
+--==================================================
+-- WINDOW CREATED
+--==================================================
+
+Library:Notify({
+    Title = "msPaint V4",
+    Description = "New Tab đã được tạo!",
+    Time = 3
+})
